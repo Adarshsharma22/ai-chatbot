@@ -5,17 +5,19 @@ import { ArrowUp } from "lucide-react";
 
 type ChatInputProps = {
   onSend: (message: string) => void;
+  disabled?: boolean;
 };
 
 export default function ChatInput({
   onSend,
+  disabled = false,
 }: ChatInputProps) {
   const [input, setInput] = useState("");
 
   const handleSend = () => {
     const message = input.trim();
 
-    if (!message) return;
+    if (!message || disabled) return;
 
     onSend(message);
     setInput("");
@@ -37,14 +39,17 @@ export default function ChatInput({
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask anything..."
+          placeholder={
+            disabled ? "AI is thinking..." : "Ask anything..."
+          }
+          disabled={disabled}
           rows={1}
-          className="min-h-[44px] flex-1 resize-none bg-transparent px-3 py-2 text-sm text-white outline-none placeholder:text-gray-500"
+          className="min-h-[44px] flex-1 resize-none bg-transparent px-3 py-2 text-sm text-white outline-none placeholder:text-gray-500 disabled:cursor-not-allowed disabled:opacity-50"
         />
 
         <button
           onClick={handleSend}
-          disabled={!input.trim()}
+          disabled={!input.trim() || disabled}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
           aria-label="Send message"
         >
