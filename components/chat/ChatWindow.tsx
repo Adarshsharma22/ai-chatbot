@@ -39,27 +39,32 @@ export default function ChatWindow() {
   const messages = activeChat?.messages ?? [];
 
   const updateChatMessages = (
-    chatId: string,
-    messages: Message[]
-  ) => {
-    setChats((currentChats) => {
-      const updatedChats = currentChats.map((chat) => {
-        if (chat.id !== chatId) {
-          return chat;
-        }
+  chatId: string,
+  updateMessages: Message[] | ((current: Message[]) => Message[])
+) => {
+  setChats((currentChats) => {
+    const updatedChats = currentChats.map((chat) => {
+      if (chat.id !== chatId) {
+        return chat;
+      }
 
-        return {
-          ...chat,
-          messages,
-          updatedAt: Date.now(),
-        };
-      });
+      const newMessages =
+        typeof updateMessages === "function"
+          ? updateMessages(chat.messages)
+          : updateMessages;
 
-      saveChats(updatedChats);
-
-      return updatedChats;
+      return {
+        ...chat,
+        messages: newMessages,
+        updatedAt: Date.now(),
+      };
     });
-  };
+
+    saveChats(updatedChats);
+
+    return updatedChats;
+  });
+};
 
   const handleNewChat = () => {
     if (isLoading) return;
@@ -180,21 +185,16 @@ export default function ChatWindow() {
 
         assistantContent += chunk;
 
-        const currentChatMessages =
-          chats.find((chat) => chat.id === chatId)?.messages ??
-          updatedMessages;
-
-        updateChatMessages(chatId, [
-          ...currentChatMessages.filter(
-            (message) =>
-              message.id !== assistantMessageId
-          ),
-          {
-            id: assistantMessageId,
-            role: "assistant",
-            content: assistantContent,
-          },
-        ]);
+        updateChatMessages(chatId, (currentMessages) => {
+        return currentMessages.map((message) =>
+            message.id === assistantMessageId
+            ? {
+                ...message,
+                content: assistantContent,
+                }
+            : message
+        );
+        });
       }
     } catch (error) {
       if (
@@ -235,6 +235,57 @@ export default function ChatWindow() {
     setActiveChatId(chatId);
   };
 
+  const handleDeleteChat = (chatId: string) => {
+  if (isLoading) return;
+
+  setChats((currentChats) => {
+    const updatedChats = currentChats.filter(
+      (chat) => chat.id !== chatId
+    );
+
+    saveChats(updatedChats);
+
+    return updatedChats;
+  });
+
+  if (activeChatId === chatId) {
+    const remainingChats = chats.filter(
+      (chat) => chat.id !== chatId
+    );
+
+    setActiveChatId(
+      remainingChats.length > 0
+        ? remainingChats[0].id
+        : null
+    );
+  }
+};
+
+const handleRenameChat = (
+  chatId: string,
+  title: string
+) => {
+  const trimmedTitle = title.trim();
+
+  if (!trimmedTitle) return;
+
+  setChats((currentChats) => {
+    const updatedChats = currentChats.map((chat) =>
+      chat.id === chatId
+        ? {
+            ...chat,
+            title: trimmedTitle,
+            updatedAt: Date.now(),
+          }
+        : chat
+    );
+
+    saveChats(updatedChats);
+
+    return updatedChats;
+  });
+};
+
   return (
     <div className="flex h-screen bg-gray-950 text-white">
       <Sidebar
@@ -242,6 +293,8 @@ export default function ChatWindow() {
         activeChatId={activeChatId}
         onNewChat={handleNewChat}
         onSelectChat={handleSelectChat}
+        onDeleteChat={handleDeleteChat}
+        onRenameChat={handleRenameChat}
       />
 
       <main className="flex min-w-0 flex-1 flex-col">
