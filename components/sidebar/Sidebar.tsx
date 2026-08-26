@@ -18,6 +18,7 @@ type SidebarProps = {
   onSelectChat: (chatId: string) => void;
   onDeleteChat: (chatId: string) => void;
   onRenameChat: (chatId: string,title: string) => void;
+  onClearChats: () => void;
 };
 
 export default function Sidebar({
@@ -27,6 +28,7 @@ export default function Sidebar({
   onSelectChat,
   onDeleteChat,
   onRenameChat,
+  onClearChats,
 }: SidebarProps) {
 
   const [editingChatId, setEditingChatId] =
@@ -61,14 +63,14 @@ export default function Sidebar({
           <div className="space-y-1">
             {chats.map((chat) => (
             <div
-                key={chat.id}
+                key={chat._id}
                 className={`group flex items-center rounded-lg transition ${
-                activeChatId === chat.id
+                activeChatId === chat._id
                     ? "bg-gray-800"
                     : "hover:bg-gray-900"
                 }`}
             >
-                {editingChatId === chat.id ? (
+                {editingChatId === chat._id ? (
                 <div className="flex min-w-0 flex-1 items-center gap-1 px-2 py-1">
                     <input
                     value={editingTitle}
@@ -77,7 +79,7 @@ export default function Sidebar({
                     }
                     onKeyDown={(event) => {
                         if (event.key === "Enter") {
-                        onRenameChat(chat.id, editingTitle);
+                        onRenameChat(chat._id, editingTitle);
                         setEditingChatId(null);
                         }
 
@@ -91,7 +93,7 @@ export default function Sidebar({
 
                     <button
                     onClick={() => {
-                        onRenameChat(chat.id, editingTitle);
+                        onRenameChat(chat._id, editingTitle);
                         setEditingChatId(null);
                     }}
                     className="p-1 text-gray-400 hover:text-white"
@@ -111,7 +113,7 @@ export default function Sidebar({
                 ) : (
                 <>
                     <button
-                    onClick={() => onSelectChat(chat.id)}
+                    onClick={() => onSelectChat(chat._id)}
                     className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left text-sm"
                     >
                     <MessageSquare
@@ -126,7 +128,7 @@ export default function Sidebar({
 
                     <button
                     onClick={() => {
-                        setEditingChatId(chat.id);
+                        setEditingChatId(chat._id);
                         setEditingTitle(chat.title);
                     }}
                     className="hidden p-1 text-gray-500 hover:text-white group-hover:block"
@@ -136,7 +138,7 @@ export default function Sidebar({
                     </button>
 
                     <button
-                    onClick={() => onDeleteChat(chat.id)}
+                    onClick={() => onDeleteChat(chat._id)}
                     className="mr-2 hidden p-1 text-gray-500 hover:text-red-400 group-hover:block"
                     aria-label="Delete chat"
                     >
@@ -153,17 +155,11 @@ export default function Sidebar({
       {/* Clear All */}
       <div className="border-t border-gray-800 p-4">
         <button
-          onClick={() => {
-            localStorage.removeItem(
-              "ai-chatbot-chats"
-            );
-
-            window.location.reload();
-          }}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-400 transition hover:bg-gray-900 hover:text-white"
+        onClick={onClearChats}
+        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-400 transition hover:bg-gray-900 hover:text-white"
         >
-          <Trash2 size={17} />
-          Clear All Chats
+            <Trash2 size={17} />
+            Clear All Chats
         </button>
       </div>
     </aside>

@@ -5,9 +5,9 @@ export type Message = {
 };
 
 export type Chat = {
-  id: string;
+  _id: string;
   title: string;
   messages: Message[];
-  createdAt: number;
-  updatedAt: number;
+  createdAt: string | Date;
+  updatedAt: string | Date;
 };

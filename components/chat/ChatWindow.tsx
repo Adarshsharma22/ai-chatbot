@@ -8,7 +8,6 @@ import ChatInput from "@/components/chat/ChatInput";
 import Sidebar from "@/components/sidebar/Sidebar";
 
 import type { Chat, Message } from "@/types/chat";
-import { getChats, saveChats } from "@/lib/chat-storage";
 
 export default function ChatWindow() {
   const [chats, setChats] = useState<Chat[]>([]);
@@ -17,105 +16,230 @@ export default function ChatWindow() {
   );
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isChatsLoading, setIsChatsLoading] = useState(true);
 
   const [abortController, setAbortController] =
     useState<AbortController | null>(null);
 
-  // Load chats when the application starts
+  // Load chats from MongoDB
   useEffect(() => {
-    const storedChats = getChats();
+    const loadChats = async () => {
+      try {
+        const response = await fetch("/api/chats");
 
-    setChats(storedChats);
+        if (!response.ok) {
+          throw new Error("Failed to load chats");
+        }
 
-    if (storedChats.length > 0) {
-      setActiveChatId(storedChats[0].id);
-    }
+        const data = await response.json();
+
+        setChats(data);
+
+        if (data.length > 0) {
+          setActiveChatId(data[0]._id);
+        }
+      } catch (error) {
+        console.error("Failed to load chats:", error);
+      } finally {
+        setIsChatsLoading(false);
+      }
+    };
+
+    loadChats();
   }, []);
 
   const activeChat = chats.find(
-    (chat) => chat.id === activeChatId
+    (chat) => chat._id === activeChatId
   );
 
   const messages = activeChat?.messages ?? [];
 
-  const updateChatMessages = (
-  chatId: string,
-  updateMessages: Message[] | ((current: Message[]) => Message[])
-) => {
-  setChats((currentChats) => {
-    const updatedChats = currentChats.map((chat) => {
-      if (chat.id !== chatId) {
-        return chat;
+  // Create new chat
+  const handleNewChat = async () => {
+    if (isLoading) return;
+
+    try {
+      const response = await fetch("/api/chats", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: "New Chat",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create chat");
       }
 
-      const newMessages =
-        typeof updateMessages === "function"
-          ? updateMessages(chat.messages)
-          : updateMessages;
+      const newChat = await response.json();
 
-      return {
-        ...chat,
-        messages: newMessages,
-        updatedAt: Date.now(),
-      };
-    });
+      setChats((currentChats) => [
+        newChat,
+        ...currentChats,
+      ]);
 
-    saveChats(updatedChats);
-
-    return updatedChats;
-  });
-};
-
-  const handleNewChat = () => {
-    if (isLoading) return;
-
-    const newChat: Chat = {
-      id: crypto.randomUUID(),
-      title: "New Chat",
-      messages: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-
-    setChats((currentChats) => {
-      const updatedChats = [newChat, ...currentChats];
-
-      saveChats(updatedChats);
-
-      return updatedChats;
-    });
-
-    setActiveChatId(newChat.id);
+      setActiveChatId(newChat._id);
+    } catch (error) {
+      console.error("Failed to create chat:", error);
+    }
   };
 
-  const handleSend = async (content: string) => {
+  // Select chat
+  const handleSelectChat = (chatId: string) => {
     if (isLoading) return;
+
+    setActiveChatId(chatId);
+  };
+
+  // Update chat in MongoDB
+  const updateChat = async (
+    chatId: string,
+    updates: {
+      title?: string;
+      messages?: Message[];
+    }
+  ) => {
+    const response = await fetch(`/api/chats/${chatId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(updates),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to update chat");
+    }
+
+    const updatedChat = await response.json();
+
+    setChats((currentChats) =>
+      currentChats.map((chat) =>
+        chat._id === chatId
+          ? updatedChat
+          : chat
+      )
+    );
+
+    return updatedChat;
+  };
+
+  // Delete chat
+  const handleDeleteChat = async (chatId: string) => {
+    if (isLoading) return;
+
+    try {
+      const response = await fetch(
+        `/api/chats/${chatId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to delete chat");
+      }
+
+      setChats((currentChats) =>
+        currentChats.filter(
+          (chat) => chat._id !== chatId
+        )
+      );
+
+      if (activeChatId === chatId) {
+        const remainingChats = chats.filter(
+          (chat) => chat._id !== chatId
+        );
+
+        setActiveChatId(
+          remainingChats.length > 0
+            ? remainingChats[0]._id
+            : null
+        );
+      }
+    } catch (error) {
+      console.error("Failed to delete chat:", error);
+    }
+  };
+
+  // Rename chat
+  const handleRenameChat = async (
+    chatId: string,
+    title: string
+  ) => {
+    const trimmedTitle = title.trim();
+
+    if (!trimmedTitle) return;
+
+    try {
+      await updateChat(chatId, {
+        title: trimmedTitle,
+      });
+    } catch (error) {
+      console.error("Failed to rename chat:", error);
+    }
+  };
+
+  // Send message
+  const handleSend = async (content: string) => {
+    
+    if (isLoading) return;
+    
 
     let chatId = activeChatId;
 
-    // Automatically create a chat if none exists
+    // If there is no chat, create one automatically
     if (!chatId) {
-      const newChat: Chat = {
-        id: crypto.randomUUID(),
-        title: content.slice(0, 40),
-        messages: [],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      try {
+        const createResponse = await fetch(
+          "/api/chats",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              title: content.slice(0, 40),
+            }),
+          }
+        );
 
-      setChats([newChat]);
-      saveChats([newChat]);
+        if (!createResponse.ok) {
+          throw new Error("Failed to create chat");
+        }
 
-      setActiveChatId(newChat.id);
+        const newChat =
+          await createResponse.json();
 
-      chatId = newChat.id;
+        setChats((currentChats) => [
+          newChat,
+          ...currentChats,
+        ]);
+
+        setActiveChatId(newChat._id);
+
+        chatId = newChat._id;
+      } catch (error) {
+        console.error(
+          "Failed to create chat:",
+          error
+        );
+
+        return;
+      }
     }
 
+    // Make sure TypeScript knows chatId is a string.
+    if (!chatId) return;
+
     const currentChat = chats.find(
-      (chat) => chat.id === chatId
+      (chat) => chat._id === chatId
     );
 
-    const currentMessages = currentChat?.messages ?? [];
+    const currentMessages =
+      currentChat?.messages ?? [];
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -128,7 +252,19 @@ export default function ChatWindow() {
       userMessage,
     ];
 
-    updateChatMessages(chatId, updatedMessages);
+    // Save user message
+    try {
+      await updateChat(chatId, {
+        messages: updatedMessages,
+      });
+    } catch (error) {
+      console.error(
+        "Failed to save user message:",
+        error
+      );
+
+      return;
+    }
 
     setIsLoading(true);
 
@@ -149,33 +285,42 @@ export default function ChatWindow() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to get AI response");
+        throw new Error(
+          "Failed to get AI response"
+        );
       }
 
       if (!response.body) {
-        throw new Error("Response body is empty");
+        throw new Error(
+          "Response body is empty"
+        );
       }
 
-      const reader = response.body.getReader();
+      const reader =
+        response.body.getReader();
+
       const decoder = new TextDecoder();
 
-      const assistantMessageId = crypto.randomUUID();
-
-      const assistantMessage: Message = {
-        id: assistantMessageId,
-        role: "assistant",
-        content: "",
-      };
-
-      updateChatMessages(chatId, [
-        ...updatedMessages,
-        assistantMessage,
-      ]);
+      const assistantMessageId =
+        crypto.randomUUID();
 
       let assistantContent = "";
 
+      // Add empty assistant message
+      await updateChat(chatId, {
+        messages: [
+          ...updatedMessages,
+          {
+            id: assistantMessageId,
+            role: "assistant",
+            content: "",
+          },
+        ],
+      });
+
       while (true) {
-        const { done, value } = await reader.read();
+        const { done, value } =
+          await reader.read();
 
         if (done) break;
 
@@ -185,15 +330,32 @@ export default function ChatWindow() {
 
         assistantContent += chunk;
 
-        updateChatMessages(chatId, (currentMessages) => {
-        return currentMessages.map((message) =>
-            message.id === assistantMessageId
-            ? {
-                ...message,
-                content: assistantContent,
-                }
-            : message
-        );
+        const latestMessages =
+          (
+            await fetch(
+              `/api/chats/${chatId}`
+            )
+          ).json();
+
+        const latestChat =
+          await latestMessages;
+
+        const messagesWithoutAssistant =
+          latestChat.messages.filter(
+            (message: Message) =>
+              message.id !==
+              assistantMessageId
+          );
+
+        await updateChat(chatId, {
+          messages: [
+            ...messagesWithoutAssistant,
+            {
+              id: assistantMessageId,
+              role: "assistant",
+              content: assistantContent,
+            },
+          ],
         });
       }
     } catch (error) {
@@ -206,19 +368,31 @@ export default function ChatWindow() {
 
       console.error("Chat error:", error);
 
-      const currentChatMessages =
-        chats.find((chat) => chat.id === chatId)?.messages ??
-        updatedMessages;
+      try {
+        const latestResponse = await fetch(
+          `/api/chats/${chatId}`
+        );
 
-      updateChatMessages(chatId, [
-        ...currentChatMessages,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content:
-            "Sorry, something went wrong. Please try again.",
-        },
-      ]);
+        const latestChat =
+          await latestResponse.json();
+
+        await updateChat(chatId, {
+          messages: [
+            ...latestChat.messages,
+            {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content:
+                "Sorry, something went wrong. Please try again.",
+            },
+          ],
+        });
+      } catch (saveError) {
+        console.error(
+          "Failed to save error message:",
+          saveError
+        );
+      }
     } finally {
       setIsLoading(false);
       setAbortController(null);
@@ -229,62 +403,45 @@ export default function ChatWindow() {
     abortController?.abort();
   };
 
-  const handleSelectChat = (chatId: string) => {
-    if (isLoading) return;
-
-    setActiveChatId(chatId);
-  };
-
-  const handleDeleteChat = (chatId: string) => {
+  const handleClearChats = async () => {
   if (isLoading) return;
 
-  setChats((currentChats) => {
-    const updatedChats = currentChats.filter(
-      (chat) => chat.id !== chatId
-    );
+  const confirmed = window.confirm(
+    "Delete all chats?"
+  );
 
-    saveChats(updatedChats);
+  if (!confirmed) return;
 
-    return updatedChats;
-  });
+  try {
+    const response = await fetch("/api/chats", {
+      method: "DELETE",
+    });
 
-  if (activeChatId === chatId) {
-    const remainingChats = chats.filter(
-      (chat) => chat.id !== chatId
-    );
+    if (!response.ok) {
+      throw new Error(
+        "Failed to delete all chats"
+      );
+    }
 
-    setActiveChatId(
-      remainingChats.length > 0
-        ? remainingChats[0].id
-        : null
+    setChats([]);
+    setActiveChatId(null);
+  } catch (error) {
+    console.error(
+      "Failed to clear chats:",
+      error
     );
   }
 };
 
-const handleRenameChat = (
-  chatId: string,
-  title: string
-) => {
-  const trimmedTitle = title.trim();
-
-  if (!trimmedTitle) return;
-
-  setChats((currentChats) => {
-    const updatedChats = currentChats.map((chat) =>
-      chat.id === chatId
-        ? {
-            ...chat,
-            title: trimmedTitle,
-            updatedAt: Date.now(),
-          }
-        : chat
+  if (isChatsLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-950 text-white">
+        <p className="text-sm text-gray-400">
+          Loading chats...
+        </p>
+      </div>
     );
-
-    saveChats(updatedChats);
-
-    return updatedChats;
-  });
-};
+  }
 
   return (
     <div className="flex h-screen bg-gray-950 text-white">
@@ -295,6 +452,7 @@ const handleRenameChat = (
         onSelectChat={handleSelectChat}
         onDeleteChat={handleDeleteChat}
         onRenameChat={handleRenameChat}
+        onClearChats={handleClearChats}
       />
 
       <main className="flex min-w-0 flex-1 flex-col">
