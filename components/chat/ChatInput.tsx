@@ -6,11 +6,13 @@ import { ArrowUp } from "lucide-react";
 type ChatInputProps = {
   onSend: (message: string) => void;
   disabled?: boolean;
+  onStop?: () => void;
 };
 
 export default function ChatInput({
   onSend,
   disabled = false,
+  onStop,
 }: ChatInputProps) {
   const [input, setInput] = useState("");
 
@@ -47,14 +49,24 @@ export default function ChatInput({
           className="min-h-[44px] flex-1 resize-none bg-transparent px-3 py-2 text-sm text-white outline-none placeholder:text-gray-500 disabled:cursor-not-allowed disabled:opacity-50"
         />
 
+        {disabled ? (
         <button
-          onClick={handleSend}
-          disabled={!input.trim() || disabled}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
-          aria-label="Send message"
+            onClick={onStop}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-black transition hover:bg-gray-200"
+            aria-label="Stop generating"
         >
-          <ArrowUp size={18} />
+            <div className="h-3 w-3 rounded-sm bg-black" />
         </button>
+        ) : (
+        <button
+            onClick={handleSend}
+            disabled={!input.trim()}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label="Send message"
+        >
+            <ArrowUp size={18} />
+        </button>
+        )}
       </div>
 
       <p className="mt-2 text-center text-xs text-gray-500">

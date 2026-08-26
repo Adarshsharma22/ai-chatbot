@@ -1,5 +1,5 @@
 import { google } from "@ai-sdk/google";
-import { generateText } from "ai";
+import { streamText } from "ai";
 
 export async function POST(request: Request) {
   try {
@@ -8,7 +8,7 @@ export async function POST(request: Request) {
       !!process.env.GOOGLE_GENERATIVE_AI_API_KEY
     );
 
-    const body = await request.json();
+        const body = await request.json();
 
     const messages = body.messages;
 
@@ -23,14 +23,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await generateText({
+    const result = streamText({
       model: google("gemini-3.6-flash"),
       messages,
     });
 
-    return Response.json({
-      message: result.text,
-    });
+    return result.toTextStreamResponse();
   } catch (error) {
     console.error("Chat API error:", error);
 
