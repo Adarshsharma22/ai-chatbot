@@ -184,62 +184,46 @@ export default function ChatWindow() {
 
   // Send message
   const handleSend = async (content: string) => {
-    
-    if (isLoading) return;
-    
+  if (isLoading) return;
 
-    let chatId = activeChatId;
+  let chatId = activeChatId;
 
-    // If there is no chat, create one automatically
+  try {
+    // Create chat if none exists
     if (!chatId) {
-      try {
-        const createResponse = await fetch(
-          "/api/chats",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              title: content.slice(0, 40),
-            }),
-          }
-        );
+      const createResponse = await fetch("/api/chats", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: content.slice(0, 40),
+        }),
+      });
 
-        if (!createResponse.ok) {
-          throw new Error("Failed to create chat");
-        }
-
-        const newChat =
-          await createResponse.json();
-
-        setChats((currentChats) => [
-          newChat,
-          ...currentChats,
-        ]);
-
-        setActiveChatId(newChat._id);
-
-        chatId = newChat._id;
-      } catch (error) {
-        console.error(
-          "Failed to create chat:",
-          error
-        );
-
-        return;
+      if (!createResponse.ok) {
+        throw new Error("Failed to create chat");
       }
+
+      const newChat = await createResponse.json();
+
+      setChats((currentChats) => [
+        newChat,
+        ...currentChats,
+      ]);
+
+      setActiveChatId(newChat._id);
+
+      chatId = newChat._id;
     }
 
-    // Make sure TypeScript knows chatId is a string.
     if (!chatId) return;
 
     const currentChat = chats.find(
       (chat) => chat._id === chatId
     );
 
-    const currentMessages =
-      currentChat?.messages ?? [];
+    const currentMessages = currentChat?.messages ?? [];
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -253,18 +237,9 @@ export default function ChatWindow() {
     ];
 
     // Save user message
-    try {
-      await updateChat(chatId, {
-        messages: updatedMessages,
-      });
-    } catch (error) {
-      console.error(
-        "Failed to save user message:",
-        error
-      );
-
-      return;
-    }
+    await updateChat(chatId, {
+      messages: updatedMessages,
+    });
 
     setIsLoading(true);
 
@@ -272,102 +247,55 @@ export default function ChatWindow() {
 
     setAbortController(controller);
 
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messages: updatedMessages,
-        }),
-        signal: controller.signal,
-      });
+    // Send message to Gemini
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messages: updatedMessages,
+      }),
+      signal: controller.signal,
+    });
 
-      if (!response.ok) {
-        throw new Error(
-          "Failed to get AI response"
-        );
-      }
+    if (!response.ok) {
+      throw new Error("Failed to get AI response");
+    }
 
-      if (!response.body) {
-        throw new Error(
-          "Response body is empty"
-        );
-      }
+    // Read JSON response
+    const data = await response.json();
 
-      const reader =
-        response.body.getReader();
+    if (!data.message || typeof data.message !== "string") {
+      throw new Error("Invalid AI response");
+    }
 
-      const decoder = new TextDecoder();
+    const assistantMessage: Message = {
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: data.message,
+    };
 
-      const assistantMessageId =
-        crypto.randomUUID();
+    const finalMessages = [
+      ...updatedMessages,
+      assistantMessage,
+    ];
 
-      let assistantContent = "";
+    // Save complete conversation
+    await updateChat(chatId, {
+      messages: finalMessages,
+    });
+  } catch (error) {
+    if (
+      error instanceof DOMException &&
+      error.name === "AbortError"
+    ) {
+      return;
+    }
 
-      // Add empty assistant message
-      await updateChat(chatId, {
-        messages: [
-          ...updatedMessages,
-          {
-            id: assistantMessageId,
-            role: "assistant",
-            content: "",
-          },
-        ],
-      });
+    console.error("Chat error:", error);
 
-      while (true) {
-        const { done, value } =
-          await reader.read();
-
-        if (done) break;
-
-        const chunk = decoder.decode(value, {
-          stream: true,
-        });
-
-        assistantContent += chunk;
-
-        const latestMessages =
-          (
-            await fetch(
-              `/api/chats/${chatId}`
-            )
-          ).json();
-
-        const latestChat =
-          await latestMessages;
-
-        const messagesWithoutAssistant =
-          latestChat.messages.filter(
-            (message: Message) =>
-              message.id !==
-              assistantMessageId
-          );
-
-        await updateChat(chatId, {
-          messages: [
-            ...messagesWithoutAssistant,
-            {
-              id: assistantMessageId,
-              role: "assistant",
-              content: assistantContent,
-            },
-          ],
-        });
-      }
-    } catch (error) {
-      if (
-        error instanceof DOMException &&
-        error.name === "AbortError"
-      ) {
-        return;
-      }
-
-      console.error("Chat error:", error);
-
+    if (chatId) {
       try {
         const latestResponse = await fetch(
           `/api/chats/${chatId}`
@@ -393,11 +321,12 @@ export default function ChatWindow() {
           saveError
         );
       }
-    } finally {
-      setIsLoading(false);
-      setAbortController(null);
     }
-  };
+  } finally {
+    setIsLoading(false);
+    setAbortController(null);
+  }
+};
 
   const handleStop = () => {
     abortController?.abort();
