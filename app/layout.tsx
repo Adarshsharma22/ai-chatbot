@@ -26,10 +26,6 @@ export const viewport: Viewport = {
   ],
 };
 
-// Minimal background/text values per theme, just enough to paint the
-// correct colors before React hydrates. ThemeContext (client-side) takes
-// over immediately after and applies the full variable set — this only
-// prevents a flash of the wrong theme on reload.
 const THEME_BOOT_SCRIPT = `
 (function () {
   try {
