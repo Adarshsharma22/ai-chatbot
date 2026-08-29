@@ -492,13 +492,7 @@ Before using this application for a large number of users, consider adding:
 
 ## 📸 Screenshots
 
-Add your project screenshots here after deployment.
-
-Example:
-
-```md
-![AI Chatbot Screenshot](./screenshots/chatbot.png)
-```
+![alt text](image.png)
 
 ---
 
