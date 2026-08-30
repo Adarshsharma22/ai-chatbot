@@ -1,93 +1,42 @@
-import { getChatsCollection } from "@/lib/db";
-import { getOrCreateUserId } from "@/lib/session";
-
-export async function GET() {
-  try {
-    const userId = await getOrCreateUserId();
-    const chats = await getChatsCollection();
-
-    const results = await chats
-      .find({ userId })
-      .sort({ updatedAt: -1 })
-      .toArray();
-
-    return Response.json(results);
-  } catch (error) {
-    console.error("Failed to fetch chats:", error);
-
-    return Response.json(
-      {
-        error: "Failed to fetch chats",
-      },
-      {
-        status: 500,
-      }
-    );
-  }
-}
+import { google } from "@ai-sdk/google";
+import { generateText } from "ai";
 
 export async function POST(request: Request) {
   try {
-    const userId = await getOrCreateUserId();
     const body = await request.json();
 
-    const { title = "New Chat" } = body;
+    // Validate messages
+    if (!body.messages || !Array.isArray(body.messages)) {
+      return Response.json(
+        {
+          error: "Invalid messages",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
 
-    const chat = {
-      userId,
-      title,
-      messages: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    const chats = await getChatsCollection();
-
-    const result = await chats.insertOne(chat);
-
-    return Response.json(
-      {
-        id: result.insertedId,
-        ...chat,
-      },
-      {
-        status: 201,
-      }
-    );
-  } catch (error) {
-    console.error("Failed to create chat:", error);
-
-    return Response.json(
-      {
-        error: "Failed to create chat",
-      },
-      {
-        status: 500,
-      }
-    );
-  }
-}
-
-export async function DELETE() {
-  try {
-    const userId = await getOrCreateUserId();
-    const chats = await getChatsCollection();
-
-    // Only wipe THIS visitor's chats, never everyone's
-    await chats.deleteMany({ userId });
-
-    return Response.json({
-      message: "All chats deleted successfully",
+    // Generate AI response using Gemini
+    const result = await generateText({
+      model: google("gemini-3.6-flash"),
+      messages: body.messages,
     });
-  } catch (error) {
-    console.error(
-      "Failed to delete all chats:",
-      error
-    );
 
     return Response.json(
       {
-        error: "Failed to delete all chats",
+        message: result.text,
+      },
+      {
+        status: 200,
+      }
+    );
+  } catch (error) {
+    console.error("AI generation error:", error);
+
+    return Response.json(
+      {
+        error: "Failed to generate AI response",
       },
       {
         status: 500,
