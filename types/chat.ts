@@ -6,6 +6,7 @@ export type Message = {
 
 export type Chat = {
   _id: string;
+  userId?: string;
   title: string;
   messages: Message[];
   createdAt: string | Date;

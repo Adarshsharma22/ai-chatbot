@@ -1,5 +1,6 @@
 import { ObjectId } from "mongodb";
 import { getChatsCollection } from "@/lib/db";
+import { getOrCreateUserId } from "@/lib/session";
 
 type Params = {
   params: Promise<{
@@ -21,10 +22,14 @@ export async function GET(
       );
     }
 
+    const userId = await getOrCreateUserId();
     const chats = await getChatsCollection();
 
+    // Matching on userId too means even a guessed/shared chat ID
+    // won't open someone else's conversation
     const chat = await chats.findOne({
       _id: new ObjectId(id),
+      userId,
     });
 
     if (!chat) {
@@ -59,6 +64,7 @@ export async function PUT(
       );
     }
 
+    const userId = await getOrCreateUserId();
     const body = await request.json();
 
     const chats = await getChatsCollection();
@@ -78,6 +84,7 @@ export async function PUT(
     const result = await chats.findOneAndUpdate(
       {
         _id: new ObjectId(id),
+        userId,
       },
       {
         $set: updateData,
@@ -119,10 +126,12 @@ export async function DELETE(
       );
     }
 
+    const userId = await getOrCreateUserId();
     const chats = await getChatsCollection();
 
     const result = await chats.deleteOne({
       _id: new ObjectId(id),
+      userId,
     });
 
     if (result.deletedCount === 0) {

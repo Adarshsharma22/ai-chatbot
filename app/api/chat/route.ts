@@ -1,38 +1,93 @@
-import { google } from "@ai-sdk/google";
-import { generateText } from "ai";
+import { getChatsCollection } from "@/lib/db";
+import { getOrCreateUserId } from "@/lib/session";
 
-export async function POST(request: Request) {
+export async function GET() {
   try {
+    const userId = await getOrCreateUserId();
+    const chats = await getChatsCollection();
 
-    const body = await request.json();
+    const results = await chats
+      .find({ userId })
+      .sort({ updatedAt: -1 })
+      .toArray();
 
-    const { messages } = body;
-
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return Response.json(
-        {
-          error: "Messages are required",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    const result = await generateText({
-      model: google("gemini-3.6-flash"),
-      messages,
-    });
-
-    return Response.json({
-      message: result.text,
-    });
+    return Response.json(results);
   } catch (error) {
-    console.error("Chat API error:", error);
+    console.error("Failed to fetch chats:", error);
 
     return Response.json(
       {
-        error: "Failed to generate AI response",
+        error: "Failed to fetch chats",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const userId = await getOrCreateUserId();
+    const body = await request.json();
+
+    const { title = "New Chat" } = body;
+
+    const chat = {
+      userId,
+      title,
+      messages: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const chats = await getChatsCollection();
+
+    const result = await chats.insertOne(chat);
+
+    return Response.json(
+      {
+        id: result.insertedId,
+        ...chat,
+      },
+      {
+        status: 201,
+      }
+    );
+  } catch (error) {
+    console.error("Failed to create chat:", error);
+
+    return Response.json(
+      {
+        error: "Failed to create chat",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
+}
+
+export async function DELETE() {
+  try {
+    const userId = await getOrCreateUserId();
+    const chats = await getChatsCollection();
+
+    // Only wipe THIS visitor's chats, never everyone's
+    await chats.deleteMany({ userId });
+
+    return Response.json({
+      message: "All chats deleted successfully",
+    });
+  } catch (error) {
+    console.error(
+      "Failed to delete all chats:",
+      error
+    );
+
+    return Response.json(
+      {
+        error: "Failed to delete all chats",
       },
       {
         status: 500,
