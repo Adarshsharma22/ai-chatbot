@@ -1,11 +1,16 @@
 import { getChatsCollection } from "@/lib/db";
+import { getOrCreateUserId } from "@/lib/session";
 
 export async function GET() {
   try {
+    // Get the unique anonymous user ID for this browser/device
+    const userId = await getOrCreateUserId();
+
     const chats = await getChatsCollection();
 
+    // Only return this user's chats
     const results = await chats
-      .find({})
+      .find({ userId })
       .sort({ updatedAt: -1 })
       .toArray();
 
@@ -26,11 +31,16 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    // Get the unique user ID for this browser/device
+    const userId = await getOrCreateUserId();
+
     const body = await request.json();
 
     const { title = "New Chat" } = body;
 
+    // Store the userId with the chat
     const chat = {
+      userId,
       title,
       messages: [],
       createdAt: new Date(),
@@ -66,18 +76,19 @@ export async function POST(request: Request) {
 
 export async function DELETE() {
   try {
+    // Get the current user's ID
+    const userId = await getOrCreateUserId();
+
     const chats = await getChatsCollection();
 
-    await chats.deleteMany({});
+    // Delete ONLY this user's chats
+    await chats.deleteMany({ userId });
 
     return Response.json({
       message: "All chats deleted successfully",
     });
   } catch (error) {
-    console.error(
-      "Failed to delete all chats:",
-      error
-    );
+    console.error("Failed to delete all chats:", error);
 
     return Response.json(
       {
