@@ -234,24 +234,28 @@ function ChatWindowInner() {
 
       console.error("Chat error:", error);
 
-      if (chatId) {
-        try {
-          const latestResponse = await fetch(`/api/chats/${chatId}`);
-          const latestChat = await latestResponse.json();
+      if (error instanceof Error && error.message === "TOKEN_EXPIRED") {
+        if (chatId) {
+          try {
+            const latestResponse = await fetch(`/api/chats/${chatId}`);
+            const latestChat = await latestResponse.json();
 
-          await updateChat(chatId, {
-            messages: [
-              ...latestChat.messages,
-              {
-                id: crypto.randomUUID(),
-                role: "assistant",
-                content: "Sorry, something went wrong. Please try again.",
-              },
-            ],
-          });
-        } catch (saveError) {
-          console.error("Failed to save error message:", saveError);
+            await updateChat(chatId, {
+              messages: [
+                ...latestChat.messages,
+                {
+                  id: crypto.randomUUID(),
+                  role: "assistant",
+                  content: "Your session has expired. Please log in again.",
+                },
+              ],
+            });
+          } catch (saveError) {
+            console.error("Failed to save token expiry message:", saveError);
+          }
         }
+
+        return;
       }
     } finally {
       setIsLoading(false);
@@ -273,7 +277,11 @@ function ChatWindowInner() {
       const response = await fetch("/api/chats", { method: "DELETE" });
 
       if (!response.ok) {
-        throw new Error("Failed to delete all chats");
+        if (response.status === 401) {
+          throw new Error("TOKEN_EXPIRED");
+        }
+
+        throw new Error("Failed to get AI response");
       }
 
       setChats([]);

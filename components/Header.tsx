@@ -11,7 +11,7 @@ type HeaderProps = {
 
 export default function Header({ onOpenSidebar }: HeaderProps) {
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--bg-header)] px-3 backdrop-blur-xl sm:h-16 sm:px-6">
+    <header className="flex h-14 z-30 shrink-0 items-center justify-between border-b border-[var(--border)] bg-[var(--bg-header)] px-3 backdrop-blur-xl sm:h-16 sm:px-6">
       <div className="flex items-center gap-2.5 sm:gap-3">
         <button
           onClick={onOpenSidebar}
